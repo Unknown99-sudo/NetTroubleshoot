@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "NetTrouble",
+    "slug": "nettrouble",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.nettrouble.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#030712"
+      },
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.nettrouble.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "NetTrouble needs access to pick product and OEM logo images.",
+        "NSPhotoLibraryAddUsageDescription": "NetTrouble may save exported files to your photo library."
+      }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "NetTrouble needs access to pick product and OEM logo images."
+        }
+      ],
+      "expo-document-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "abe7b560-82b2-4cbe-a039-da7fc5eff47a"
+      }
+    }
+  }
+}
