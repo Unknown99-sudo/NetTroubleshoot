@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Image, Alert, TextInput
+  Image, Alert, TextInput, Linking
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +19,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'info' | 'cli' | 'datasheets';
+type Tab = 'info' | 'cli' | 'datasheets' | 'links';
 
 export default function ProductDetailModal({ product, oem, category, onClose }: Props) {
   const store = useAppStore();
@@ -39,6 +39,7 @@ export default function ProductDetailModal({ product, oem, category, onClose }: 
     { id: 'info' as Tab, label: 'Info', icon: 'information-circle-outline' },
     { id: 'cli' as Tab, label: `CLI (${product.cliCommands.length})`, icon: 'terminal-outline' },
     { id: 'datasheets' as Tab, label: `Docs (${product.datasheets.length})`, icon: 'document-text-outline' },
+    { id: 'links' as Tab, label: `Links (${product.referenceLinks?.length || 0})`, icon: 'link-outline' },
   ];
 
   return (
@@ -120,9 +121,9 @@ export default function ProductDetailModal({ product, oem, category, onClose }: 
       {/* CLI tab */}
       {tab === 'cli' && (
         <View style={styles.tabContent}>
-          <TextInput value={cliSearch} onChangeText={setCliSearch} placeholder='Search commands...' style={{borderWidth:1,padding:8,borderRadius:8,marginBottom:8}} />
+          <Text style={{color:'white',marginBottom:6}}>{product.cliCommands.filter(cmd => (cmd.label+' '+cmd.command+' '+(cmd.description||'')).toLowerCase().includes(cliSearch.toLowerCase())).length} result(s)</Text><TextInput value={cliSearch} onChangeText={setCliSearch} placeholder='Search commands...' placeholderTextColor={colors.gray500} style={{borderWidth:1,borderColor:colors.border700,padding:10,borderRadius:8,marginBottom:8,color:colors.white,backgroundColor:colors.bg800}} />
           {product.cliCommands.filter(cmd => (cmd.label+' '+cmd.command+' '+(cmd.description||'')).toLowerCase().includes(cliSearch.toLowerCase())).length === 0 ? (
-            <Text style={styles.emptyText}>No CLI commands added yet.</Text>
+            <Text style={styles.emptyText}>{cliSearch.length>0 ? 'No matching commands found.' : 'No CLI commands added yet.'}</Text>
           ) : (
             product.cliCommands.filter(cmd => (cmd.label+' '+cmd.command+' '+(cmd.description||'')).toLowerCase().includes(cliSearch.toLowerCase())).map(cmd => (
               <View key={cmd.id} style={styles.cliCard}>
@@ -164,6 +165,20 @@ export default function ProductDetailModal({ product, oem, category, onClose }: 
               </View>
             ))
           )}
+        </View>
+      )}
+
+
+      {tab === 'links' && (
+        <View style={styles.tabContent}>
+          {!product.referenceLinks || product.referenceLinks.length===0 ? (
+            <Text style={styles.emptyText}>No reference links added.</Text>
+          ) : product.referenceLinks.map((l:any)=>(
+            <TouchableOpacity key={l.id} style={styles.cliCard} onPress={()=>Linking.openURL(l.url)}>
+              <Text style={styles.cliLabel}>{l.title}</Text>
+              <Text style={styles.cliDesc}>{l.url}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       )}
 

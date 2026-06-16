@@ -22,6 +22,7 @@ export interface Product {
   datasheets: DataSheet[];
   cliCommands: CLICommand[];
   notes: string;
+  referenceLinks?: { id:string; title:string; url:string; notes?:string }[];
 }
 
 export interface Category {

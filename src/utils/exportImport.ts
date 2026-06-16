@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
@@ -26,8 +26,9 @@ export async function exportDataToFile(jsonStr: string): Promise<{ success: bool
     }
 
     return { success: true, message: `Saved to ${fileUri}` };
-  } catch (e) {
-    return { success: false, message: 'Failed to export data.' };
+  } catch (e: any) {
+    console.error('Export failed', e);
+    return { success: false, message: e?.message || 'Failed to export data.' };
   }
 }
 
@@ -57,7 +58,8 @@ export async function pickImportFile(): Promise<{ success: boolean; content?: st
     });
 
     return { success: true, content };
-  } catch (e) {
-    return { success: false, message: 'Failed to read the selected file.' };
+  } catch (e: any) {
+    console.error('Import failed', e);
+    return { success: false, message: e?.message || 'Failed to read the selected file.' };
   }
 }

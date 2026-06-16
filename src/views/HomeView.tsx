@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   TextInput, Image
@@ -58,6 +58,17 @@ export default function HomeView() {
 
   const isEmpty = store.data.oems.length === 0;
 
+  const searchResults = useMemo(() => {
+    if (!q) return [];
+    const results:any[]=[];
+    store.data.oems.forEach(oem=>oem.categories.forEach(cat=>cat.products.forEach(product=>{
+      const blob=(oem.name+' '+cat.name+' '+product.name+' '+product.model).toLowerCase();
+      if(blob.includes(q)) results.push({oem,cat,product});
+    })));
+    return results.slice(0,50);
+  }, [q, store.data.oems]);
+
+
   return (
     <View style={styles.container}>
       {/* Search */}
@@ -77,7 +88,7 @@ export default function HomeView() {
         )}
       </View>
 
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>{search.length>0 && searchResults.length>0 && <View>{searchResults.map(r=><TouchableOpacity key={r.product.id} style={styles.productRow} onPress={()=>setSelected({product:r.product,oem:r.oem,category:r.cat})}><View style={{flex:1}}><Text style={styles.productName}>{r.product.name}</Text><Text style={styles.productModel}>{r.oem.name} › {r.cat.name}</Text></View></TouchableOpacity>)}</View>}
         {isEmpty && (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
