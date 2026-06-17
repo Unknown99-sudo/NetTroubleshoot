@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  StatusBar, ActivityIndicator
+  StatusBar, ActivityIndicator, TextInput
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from './src/store';
 import HomeView from './src/views/HomeView';
@@ -15,6 +15,8 @@ type Tab = 'home' | 'favorites' | 'settings';
 
 function AppInner() {
   const [tab, setTab] = useState<Tab>('home');
+  const [search, setSearch] = useState('');
+  const insets = useSafeAreaInsets();
   const store = useAppStore();
   const favCount = store.data.favorites.length;
 
@@ -36,59 +38,62 @@ function AppInner() {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg900} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.logoIcon}>
-            <Ionicons name="git-network-outline" size={18} color={colors.white} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.appName}>NetTrouble</Text>
-            <Text style={styles.appSubtitle}>Network Troubleshooting</Text>
-          </View>
-          <View style={styles.activeIndicator}>
-            <View style={styles.activeDot} />
-            <Text style={styles.activeText}>Active</Text>
-          </View>
-        </View>
-
-        {/* Tab bar inside header */}
-        <View style={styles.tabRow}>
-          {tabs.map(t => {
-            const isActive = tab === t.id;
-            return (
-              <TouchableOpacity
-                key={t.id}
-                onPress={() => setTab(t.id)}
-                style={styles.tabBtn}
-              >
-                <View style={{ position: 'relative' }}>
-                  <Ionicons
-                    name={(isActive ? t.activeIcon : t.icon) as any}
-                    size={20}
-                    color={isActive ? colors.blue400 : colors.gray500}
-                  />
-                  {t.id === 'favorites' && favCount > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{favCount > 9 ? '9+' : favCount}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                  {t.label}
-                </Text>
-                {isActive && <View style={styles.activeBar} />}
-              </TouchableOpacity>
-            );
-          })}
+      {/* Search bar (replaces old branding header) */}
+      <View style={styles.searchHeader}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={16} color={colors.gray400} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search OEMs, products, models, commands…"
+            placeholderTextColor={colors.gray500}
+            style={styles.searchInput}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Ionicons name="close-circle" size={16} color={colors.gray500} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
       {/* Main content */}
       <View style={styles.content}>
-        {tab === 'home' && <HomeView />}
-        {tab === 'favorites' && <FavoritesView />}
-        {tab === 'settings' && <SettingsView />}
+        {tab === 'home' && <HomeView search={search} />}
+        {tab === 'favorites' && <FavoritesView search={search} />}
+        {tab === 'settings' && <SettingsView search={search} />}
+      </View>
+
+      {/* Bottom tab bar — reserves its own space so content never sits
+          underneath it or behind the on-screen nav buttons */}
+      <View style={[styles.bottomTabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        {tabs.map(t => {
+          const isActive = tab === t.id;
+          return (
+            <TouchableOpacity
+              key={t.id}
+              onPress={() => setTab(t.id)}
+              style={styles.tabBtn}
+            >
+              {isActive && <View style={styles.activeBar} />}
+              <View style={{ position: 'relative' }}>
+                <Ionicons
+                  name={(isActive ? t.activeIcon : t.icon) as any}
+                  size={21}
+                  color={isActive ? colors.blue400 : colors.gray500}
+                />
+                {t.id === 'favorites' && favCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{favCount > 9 ? '9+' : favCount}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </SafeAreaView>
   );
@@ -105,47 +110,38 @@ export default function App() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg950 },
   loading: { flex: 1, backgroundColor: colors.bg950, alignItems: 'center', justifyContent: 'center' },
-  header: {
+  searchHeader: {
     backgroundColor: colors.bg900,
     borderBottomWidth: 1,
     borderBottomColor: colors.border800,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  headerContent: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.bg800,
+    borderWidth: 1,
+    borderColor: colors.border700,
+    borderRadius: 12,
+    gap: 8,
   },
-  logoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.blue500,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.blue500,
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  appName: { fontSize: 15, fontWeight: '700', color: colors.white, lineHeight: 18 },
-  appSubtitle: { fontSize: 10, color: colors.gray400 },
-  activeIndicator: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  activeDot: {
-    width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green400,
-  },
-  activeText: { fontSize: 11, color: colors.gray400 },
-  tabRow: {
+  searchInput: { flex: 1, fontSize: 13, color: colors.white, padding: 0 },
+  content: { flex: 1 },
+  bottomTabBar: {
     flexDirection: 'row',
+    backgroundColor: colors.bg900,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(55,65,81,0.5)',
+    borderTopColor: colors.border800,
+    paddingTop: 8,
   },
   tabBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    gap: 2,
+    paddingVertical: 4,
+    gap: 3,
     position: 'relative',
   },
   tabLabel: {
@@ -158,11 +154,12 @@ const styles = StyleSheet.create({
   tabLabelActive: { color: colors.blue400 },
   activeBar: {
     position: 'absolute',
-    bottom: 0,
+    top: -8,
     width: 28,
     height: 2,
     borderRadius: 2,
     backgroundColor: colors.blue400,
+    alignSelf: 'center',
   },
   badge: {
     position: 'absolute',
@@ -177,5 +174,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   badgeText: { fontSize: 9, fontWeight: '700', color: '#000' },
-  content: { flex: 1 },
 });

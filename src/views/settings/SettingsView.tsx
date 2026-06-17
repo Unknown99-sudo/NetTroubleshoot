@@ -5,18 +5,21 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../../store';
-import { OEM, Category, Product } from '../../types';
+import { OEM, Category, Product, BulkImportStats } from '../../types';
 import { colors } from '../../theme/colors';
 import { exportDataToFile, pickImportFile } from '../../utils/exportImport';
+import { downloadBulkTemplate } from '../../utils/bulkTemplate';
+import { pickBulkImportFile } from '../../utils/bulkImport';
 import OEMFormModal from './OEMFormModal';
 import CategoryFormModal from './CategoryFormModal';
 import ProductFormModal from './ProductFormModal';
 import ProductEditModal from './ProductEditModal';
+import Modal from '../../components/Modal';
 
 type ToastType = 'success' | 'error';
 interface Toast { type: ToastType; message: string }
 
-export default function SettingsView() {
+export default function SettingsView({ search = '' }: { search?: string }) {
   const store = useAppStore();
 
   const [toast, setToast] = useState<Toast | null>(null);
@@ -30,6 +33,10 @@ export default function SettingsView() {
   const [editingCat, setEditingCat] = useState<{ oemId: string; cat: Category } | null>(null);
   const [showProductForm, setShowProductForm] = useState<{ oemId: string; catId: string } | null>(null);
   const [editingProduct, setEditingProduct] = useState<{ oemId: string; catId: string; product: Product } | null>(null);
+
+  const [bulkBusy, setBulkBusy] = useState<'template' | 'import' | null>(null);
+  const [bulkStatus, setBulkStatus] = useState<string>('');
+  const [bulkResult, setBulkResult] = useState<BulkImportStats | null>(null);
 
   const showToast = (type: ToastType, message: string) => {
     setToast({ type, message });
@@ -61,9 +68,63 @@ export default function SettingsView() {
     showToast(result.success ? 'success' : 'error', result.message);
   };
 
+  // ── Bulk import from spreadsheet ──
+  const handleDownloadTemplate = async () => {
+    setBulkBusy('template');
+    const result = await downloadBulkTemplate();
+    setBulkBusy(null);
+    showToast(result.success ? 'success' : 'error', result.message);
+  };
+
+  const handleBulkImport = async () => {
+    setBulkBusy('import');
+    setBulkStatus('Reading file…');
+    const picked = await pickBulkImportFile((done, total) => {
+      setBulkStatus(`Downloading attachments… ${done}/${total}`);
+    });
+    if (!picked.success || picked.message === 'cancelled') {
+      setBulkBusy(null);
+      setBulkStatus('');
+      return;
+    }
+    if (!picked.data) {
+      setBulkBusy(null);
+      setBulkStatus('');
+      showToast('error', picked.message ?? 'Could not read the file.');
+      return;
+    }
+    setBulkStatus('Mapping data…');
+    const stats = store.bulkImportRows(picked.data);
+    stats.errors = picked.data.parseErrors;
+    setBulkBusy(null);
+    setBulkStatus('');
+    setBulkResult(stats);
+  };
+
   const totalProducts = store.data.oems.reduce(
     (a, o) => a + o.categories.reduce((b, c) => b + c.products.length, 0), 0
   );
+
+  // ── Search/filter OEM management list ──
+  const q = search.trim().toLowerCase();
+  const filteredOEMs = q
+    ? store.data.oems
+        .map(oem => ({
+          ...oem,
+          categories: oem.categories
+            .map(cat => ({
+              ...cat,
+              products: cat.products.filter(p =>
+                p.name.toLowerCase().includes(q) ||
+                p.model.toLowerCase().includes(q) ||
+                (p.description || '').toLowerCase().includes(q) ||
+                (p.notes || '').toLowerCase().includes(q)
+              ),
+            }))
+            .filter(cat => cat.name.toLowerCase().includes(q) || cat.products.length > 0),
+        }))
+        .filter(oem => oem.name.toLowerCase().includes(q) || oem.categories.length > 0)
+    : store.data.oems;
 
   return (
     <View style={styles.container}>
@@ -95,6 +156,36 @@ export default function SettingsView() {
           </View>
           <Text style={styles.dataHint}>
             Export your data to share with colleagues, or import a previously exported backup.
+          </Text>
+        </View>
+
+        {/* Bulk Import from Spreadsheet */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Bulk Import from Spreadsheet</Text>
+          <View style={styles.dataButtons}>
+            <TouchableOpacity
+              onPress={handleDownloadTemplate}
+              disabled={bulkBusy !== null}
+              style={[styles.importBtn, bulkBusy !== null && styles.disabledBtnRow]}
+            >
+              <Ionicons name="document-outline" size={15} color={colors.white} />
+              <Text style={styles.importBtnText}>
+                {bulkBusy === 'template' ? 'Preparing…' : 'Download Template'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleBulkImport}
+              disabled={bulkBusy !== null}
+              style={[styles.exportBtn, bulkBusy !== null && styles.disabledBtnRow]}
+            >
+              <Ionicons name="grid-outline" size={15} color={colors.white} />
+              <Text style={styles.exportBtnText} numberOfLines={1}>
+                {bulkBusy === 'import' ? (bulkStatus || 'Importing…') : 'Upload Filled Template'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.dataHint}>
+            Fill OEM, category, product, and CLI command data into the Excel template offline, then upload it here — products and commands are mapped and added automatically.
           </Text>
         </View>
 
@@ -130,7 +221,13 @@ export default function SettingsView() {
             </View>
           )}
 
-          {store.data.oems.map(oem => (
+          {store.data.oems.length > 0 && q.length > 0 && filteredOEMs.length === 0 && (
+            <View style={styles.emptyOEM}>
+              <Text style={styles.emptyOEMText}>No matches for "{search}".</Text>
+            </View>
+          )}
+
+          {filteredOEMs.map(oem => (
             <View key={oem.id} style={styles.oemCard}>
               {/* OEM row */}
               <View style={styles.oemRow}>
@@ -159,7 +256,7 @@ export default function SettingsView() {
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => toggleOEM(oem.id)} style={styles.iconBtn}>
                   <Ionicons
-                    name={expandedOEMs.has(oem.id) ? 'chevron-down' : 'chevron-forward'}
+                    name={(q ? true : expandedOEMs.has(oem.id)) ? 'chevron-down' : 'chevron-forward'}
                     size={14}
                     color={colors.gray400}
                   />
@@ -184,7 +281,7 @@ export default function SettingsView() {
               )}
 
               {/* Categories */}
-              {expandedOEMs.has(oem.id) && (
+              {(q ? true : expandedOEMs.has(oem.id)) && (
                 <View style={styles.categoriesContainer}>
                   <View style={styles.catHeaderRow}>
                     <Text style={styles.catHeaderLabel}>Categories</Text>
@@ -212,7 +309,7 @@ export default function SettingsView() {
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => toggleCat(cat.id)} style={styles.iconBtnSm}>
                           <Ionicons
-                            name={expandedCats.has(cat.id) ? 'chevron-down' : 'chevron-forward'}
+                            name={(q ? true : expandedCats.has(cat.id)) ? 'chevron-down' : 'chevron-forward'}
                             size={12}
                             color={colors.gray500}
                           />
@@ -220,7 +317,7 @@ export default function SettingsView() {
                       </View>
 
                       {/* Products */}
-                      {expandedCats.has(cat.id) && (
+                      {(q ? true : expandedCats.has(cat.id)) && (
                         <View style={styles.productsContainer}>
                           <View style={styles.prodHeaderRow}>
                             <Text style={styles.prodHeaderLabel}>Products</Text>
@@ -315,6 +412,56 @@ export default function SettingsView() {
           onClose={() => setEditingProduct(null)}
         />
       )}
+      {bulkResult && (
+        <Modal title="Bulk Import Complete" onClose={() => setBulkResult(null)} size="md">
+          <View style={{ gap: 10 }}>
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={[styles.statValue, { color: colors.blue400 }]}>{bulkResult.oemsCreated}</Text>
+                <Text style={styles.statLabel}>OEMs Added</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={[styles.statValue, { color: colors.purple400 }]}>{bulkResult.categoriesCreated}</Text>
+                <Text style={styles.statLabel}>Categories Added</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={[styles.statValue, { color: colors.green400 }]}>{bulkResult.productsCreated}</Text>
+                <Text style={styles.statLabel}>Products Added</Text>
+              </View>
+            </View>
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={[styles.statValue, { color: colors.cyan400 }]}>{bulkResult.cliAdded}</Text>
+                <Text style={styles.statLabel}>CLI Commands Added</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={[styles.statValue, { color: colors.yellow400 }]}>{bulkResult.linksAdded}</Text>
+                <Text style={styles.statLabel}>Links Added</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={[styles.statValue, { color: colors.blue400 }]}>{bulkResult.attachmentsAdded}</Text>
+                <Text style={styles.statLabel}>Logos/Photos/PDFs Added</Text>
+              </View>
+            </View>
+            <Text style={styles.dataHint}>
+              Matching products already in the app weren't duplicated — new commands/links were attached to them instead.
+            </Text>
+            {bulkResult.errors.length > 0 && (
+              <View style={styles.bulkErrorsBox}>
+                <Text style={styles.bulkErrorsTitle}>
+                  {bulkResult.errors.length} row{bulkResult.errors.length !== 1 ? 's were' : ' was'} skipped
+                </Text>
+                {bulkResult.errors.map((err, i) => (
+                  <Text key={i} style={styles.bulkErrorText}>• {err}</Text>
+                ))}
+              </View>
+            )}
+            <TouchableOpacity onPress={() => setBulkResult(null)} style={styles.bulkDoneBtn}>
+              <Text style={styles.exportBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -330,7 +477,7 @@ const styles = StyleSheet.create({
   toastSuccess: { backgroundColor: colors.green600 },
   toastError: { backgroundColor: colors.red600 },
   toastText: { fontSize: 13, fontWeight: '500', color: colors.white },
-  scrollContent: { padding: 14, gap: 12 },
+  scrollContent: { padding: 14, paddingBottom: 32, gap: 12 },
   section: { gap: 10 },
   sectionLabel: {
     fontSize: 11, color: colors.gray400, fontWeight: '600',
@@ -350,6 +497,17 @@ const styles = StyleSheet.create({
   },
   importBtnText: { fontSize: 13, fontWeight: '500', color: colors.white },
   dataHint: { fontSize: 11, color: colors.gray500, textAlign: 'center' },
+  disabledBtnRow: { opacity: 0.5 },
+  bulkErrorsBox: {
+    padding: 10, backgroundColor: colors.yellow500_10,
+    borderWidth: 1, borderColor: colors.yellow500_30, borderRadius: 10, gap: 4,
+  },
+  bulkErrorsTitle: { fontSize: 12, fontWeight: '600', color: colors.yellow400 },
+  bulkErrorText: { fontSize: 11, color: colors.gray300 },
+  bulkDoneBtn: {
+    paddingVertical: 12, backgroundColor: colors.blue600,
+    borderRadius: 12, alignItems: 'center', marginTop: 4,
+  },
   statsRow: { flexDirection: 'row', gap: 10 },
   statCard: {
     flex: 1, backgroundColor: colors.bg800_60,

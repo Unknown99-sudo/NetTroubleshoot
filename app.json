@@ -33,7 +33,8 @@
           "photosPermission": "NetTrouble needs access to pick product and OEM logo images."
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      "expo-font"
     ],
     "extra": {
       "eas": {

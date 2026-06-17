@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Image
+  Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store';
@@ -9,9 +9,8 @@ import { OEM, Category, Product } from '../types';
 import { colors } from '../theme/colors';
 import ProductDetailModal from './ProductDetailModal';
 
-export default function HomeView() {
+export default function HomeView({ search = '' }: { search?: string }) {
   const store = useAppStore();
-  const [search, setSearch] = useState('');
   const [expandedOEMs, setExpandedOEMs] = useState<Set<string>>(new Set());
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<{ product: Product; oem: OEM; category: Category } | null>(null);
@@ -71,23 +70,6 @@ export default function HomeView() {
 
   return (
     <View style={styles.container}>
-      {/* Search */}
-      <View style={styles.searchBar}>
-        <Ionicons name="search-outline" size={16} color={colors.gray400} style={styles.searchIcon} />
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Global search: OEMs, products, models, commands..."
-          placeholderTextColor={colors.gray500}
-          style={styles.searchInput}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={16} color={colors.gray500} />
-          </TouchableOpacity>
-        )}
-      </View>
-
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>{search.length>0 && searchResults.length>0 && <View>{searchResults.map(r=><TouchableOpacity key={r.product.id} style={styles.productRow} onPress={()=>setSelected({product:r.product,oem:r.oem,category:r.cat})}><View style={{flex:1}}><Text style={styles.productName}>{r.product.name}</Text><Text style={styles.productModel}>{r.oem.name} › {r.cat.name}</Text></View></TouchableOpacity>)}</View>}
         {isEmpty && (
           <View style={styles.emptyState}>
@@ -221,22 +203,8 @@ export default function HomeView() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg950 },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    margin: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: colors.bg800,
-    borderWidth: 1,
-    borderColor: colors.border700,
-    borderRadius: 12,
-    gap: 8,
-  },
-  searchIcon: {},
-  searchInput: { flex: 1, fontSize: 13, color: colors.white },
   list: { flex: 1 },
-  listContent: { padding: 12, paddingTop: 0, gap: 10 },
+  listContent: { padding: 12, paddingBottom: 28, gap: 10 },
   emptyState: { alignItems: 'center', paddingVertical: 80, gap: 12 },
   emptyIcon: {
     width: 72,

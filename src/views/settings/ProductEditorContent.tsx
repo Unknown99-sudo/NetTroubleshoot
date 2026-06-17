@@ -10,7 +10,7 @@ import { pickDatasheets } from '../../utils/datasheetPicker';
 import { colors } from '../../theme/colors';
 const uuidv4 = () => `${Date.now()}_${Math.random().toString(36).slice(2,10)}`;
 
-type Tab = 'info' | 'cli' | 'datasheets';
+type Tab = 'info' | 'cli' | 'datasheets' | 'links';
 
 export interface ProductEditorState {
   name: string;
@@ -20,6 +20,7 @@ export interface ProductEditorState {
   image: string;
   cliCommands: CLICommand[];
   datasheets: DataSheet[];
+  referenceLinks: {id:string;title:string;url:string;notes?:string}[];
 }
 
 interface Props {
@@ -78,6 +79,7 @@ export default function ProductEditorContent({ initial, onChange, accentColor = 
     { id: 'info', label: 'Info', icon: 'image-outline' },
     { id: 'cli', label: `CLI (${state.cliCommands.length})`, icon: 'terminal-outline' },
     { id: 'datasheets', label: `Docs (${state.datasheets.length})`, icon: 'document-text-outline' },
+    { id: 'links', label: `Links (${state.referenceLinks?.length||0})`, icon: 'link-outline' },
   ];
 
   return (
@@ -213,6 +215,16 @@ export default function ProductEditorContent({ initial, onChange, accentColor = 
           ))}
         </View>
       )}
+
+      {/* Links tab */}
+      {tab === 'links' && (
+        <View style={styles.tabContent}>
+          <Input label="Heading" value={(state as any).linkHeading || ''} onChangeText={v => update({ linkHeading: v } as any)} placeholder="Product Articles" />
+          <Textarea label="Description" value={(state as any).linkDescription || ''} onChangeText={v => update({ linkDescription: v } as any)} placeholder="Description for article links" numberOfLines={3} />
+          <Text style={styles.emptyText}>Link management is enabled. Add/edit URLs in product referenceLinks data.</Text>
+        </View>
+      )}
+
     </View>
   );
 }

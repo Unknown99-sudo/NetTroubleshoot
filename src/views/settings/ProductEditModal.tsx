@@ -23,6 +23,8 @@ export default function ProductEditModal({ oemId, catId, product, onClose }: Pro
     image: product.image,
     cliCommands: [...product.cliCommands],
     datasheets: [...product.datasheets],
+    referenceLinks: [...(product.referenceLinks || [])],
+    referenceLinks: [...(product.referenceLinks||[])],
   };
   const [editorState, setEditorState] = useState<ProductEditorState>(initial);
 
@@ -36,6 +38,7 @@ export default function ProductEditModal({ oemId, catId, product, onClose }: Pro
       notes: editorState.notes,
       cliCommands: editorState.cliCommands,
       datasheets: editorState.datasheets,
+      referenceLinks: editorState.referenceLinks,
     });
     onClose();
   };

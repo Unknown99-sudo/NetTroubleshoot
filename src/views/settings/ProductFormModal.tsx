@@ -14,6 +14,7 @@ interface Props {
 const empty: ProductEditorState = {
   name: '', model: '', description: '', notes: '', image: '',
   cliCommands: [], datasheets: [],
+  referenceLinks: [],
 };
 
 export default function ProductFormModal({ oemId, catId, onClose }: Props) {
@@ -28,6 +29,7 @@ export default function ProductFormModal({ oemId, catId, onClose }: Props) {
       image: editorState.image,
       description: editorState.description,
       notes: editorState.notes,
+      referenceLinks: editorState.referenceLinks,
     });
     editorState.datasheets.forEach(ds => store.addDatasheet(oemId, catId, prod.id, ds));
     editorState.cliCommands.forEach(cmd => store.addCLICommand(oemId, catId, prod.id, cmd));

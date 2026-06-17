@@ -9,15 +9,25 @@ import Badge from '../components/Badge';
 import ProductDetailModal from './ProductDetailModal';
 import { colors } from '../theme/colors';
 
-export default function FavoritesView() {
+export default function FavoritesView({ search = '' }: { search?: string }) {
   const store = useAppStore();
   const [selected, setSelected] = useState<{ product: Product; oem: OEM; category: Category } | null>(null);
 
-  const favorites = store.getAllProducts().filter(({ product }) =>
+  const allFavorites = store.getAllProducts().filter(({ product }) =>
     store.data.favorites.includes(product.id)
   );
 
-  if (favorites.length === 0) {
+  const q = search.trim().toLowerCase();
+  const favorites = q
+    ? allFavorites.filter(({ product, oem, category }) =>
+        product.name.toLowerCase().includes(q) ||
+        product.model.toLowerCase().includes(q) ||
+        oem.name.toLowerCase().includes(q) ||
+        category.name.toLowerCase().includes(q)
+      )
+    : allFavorites;
+
+  if (allFavorites.length === 0) {
     return (
       <View style={styles.empty}>
         <View style={styles.emptyIcon}>
@@ -33,11 +43,14 @@ export default function FavoritesView() {
     <View style={styles.container}>
       <View style={styles.topBar}>
         <Text style={styles.topBarText}>
-          {favorites.length} starred device{favorites.length !== 1 ? 's' : ''}
+          {q ? `${favorites.length} of ${allFavorites.length} starred device${allFavorites.length !== 1 ? 's' : ''}` : `${favorites.length} starred device${favorites.length !== 1 ? 's' : ''}`}
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.list}>
+        {q.length > 0 && favorites.length === 0 && (
+          <Text style={styles.noResultsText}>No favorites match "{search}".</Text>
+        )}
         {favorites.map(({ product, oem, category }) => (
           <TouchableOpacity
             key={product.id}
@@ -129,7 +142,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border800,
   },
   topBarText: { fontSize: 13, color: colors.gray400 },
-  list: { padding: 12, gap: 10 },
+  noResultsText: { fontSize: 13, color: colors.gray500, textAlign: 'center', paddingVertical: 60 },
+  list: { padding: 12, paddingBottom: 28, gap: 10 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

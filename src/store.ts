@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppData, OEM, Category, Product, CLICommand, DataSheet } from './types';
+import {
+  AppData, OEM, Category, Product, CLICommand, DataSheet,
+  BulkProductRow, BulkCLIRow, BulkLinkRow, BulkImportStats,
+} from './types';
 
 const STORAGE_KEY = 'nettrouble_data';
 const uuidv4 = () => `${Date.now()}_${Math.random().toString(36).slice(2,10)}`;
@@ -288,6 +291,136 @@ export function useAppStore() {
     }
   };
 
+  // ── Bulk Import (spreadsheet) ─────────────────────
+  // Merges parsed rows from the bulk-import template into the existing
+  // data set. OEM / Category / Product are matched by name (case-insensitive,
+  // trimmed) and auto-created if no match is found, so the same workbook can
+  // be re-imported later to add more commands/links without duplicating
+  // anything already in the app.
+  const bulkImportRows = (parsed: {
+    products: BulkProductRow[];
+    cli: BulkCLIRow[];
+    links: BulkLinkRow[];
+  }): BulkImportStats => {
+    const norm = (s?: string) => (s || '').trim().toLowerCase();
+
+    // Deep-ish copy so we can mutate freely while building the new dataset.
+    const oems: OEM[] = _data.oems.map(o => ({
+      ...o,
+      categories: o.categories.map(c => ({
+        ...c,
+        products: c.products.map(p => ({
+          ...p,
+          cliCommands: [...p.cliCommands],
+          datasheets: [...p.datasheets],
+          referenceLinks: [...(p.referenceLinks || [])],
+        })),
+      })),
+    }));
+
+    const stats: BulkImportStats = {
+      oemsCreated: 0, categoriesCreated: 0, productsCreated: 0,
+      cliAdded: 0, linksAdded: 0, attachmentsAdded: 0, errors: [],
+    };
+
+    const findOrCreateOEM = (name: string, website?: string, logo?: string): OEM => {
+      let oem = oems.find(o => norm(o.name) === norm(name));
+      if (!oem) {
+        oem = { id: uuidv4(), name: name.trim(), logo: '', website: (website || '').trim(), categories: [] };
+        oems.push(oem);
+        stats.oemsCreated++;
+      } else if (website && !oem.website) {
+        oem.website = website.trim();
+      }
+      if (logo && !oem.logo) {
+        oem.logo = logo;
+        stats.attachmentsAdded++;
+      }
+      return oem;
+    };
+
+    const findOrCreateCategory = (oem: OEM, name: string): Category => {
+      let cat = oem.categories.find(c => norm(c.name) === norm(name));
+      if (!cat) {
+        cat = { id: uuidv4(), name: name.trim(), products: [] };
+        oem.categories.push(cat);
+        stats.categoriesCreated++;
+      }
+      return cat;
+    };
+
+    const findOrCreateProduct = (cat: Category, productName: string, model?: string): Product => {
+      let prod = cat.products.find(
+        p => norm(p.name) === norm(productName) && norm(p.model) === norm(model)
+      );
+      if (!prod) {
+        prod = {
+          id: uuidv4(), name: productName.trim(), model: (model || '').trim(),
+          image: '', description: '', notes: '',
+          datasheets: [], cliCommands: [], referenceLinks: [],
+        };
+        cat.products.push(prod);
+        stats.productsCreated++;
+      }
+      return prod;
+    };
+
+    for (const row of parsed.products) {
+      const oem = findOrCreateOEM(row.oemName, row.oemWebsite, row.resolvedOemLogo);
+      const cat = findOrCreateCategory(oem, row.category);
+      const prod = findOrCreateProduct(cat, row.productName, row.model);
+      if (row.description) prod.description = row.description;
+      if (row.notes) prod.notes = row.notes;
+      if (row.resolvedImage && !prod.image) {
+        prod.image = row.resolvedImage;
+        stats.attachmentsAdded++;
+      }
+      if (row.resolvedDatasheet) {
+        const alreadyHas = prod.datasheets.some(d => norm(d.name) === norm(row.resolvedDatasheet!.name));
+        if (!alreadyHas) {
+          prod.datasheets.push({ id: uuidv4(), ...row.resolvedDatasheet });
+          stats.attachmentsAdded++;
+        }
+      }
+    }
+
+    for (const row of parsed.cli) {
+      const oem = findOrCreateOEM(row.oemName);
+      const cat = findOrCreateCategory(oem, row.category);
+      const prod = findOrCreateProduct(cat, row.productName, row.model);
+      const isDuplicate = prod.cliCommands.some(
+        c => norm(c.label) === norm(row.label) && norm(c.command) === norm(row.command)
+      );
+      if (!isDuplicate) {
+        prod.cliCommands.push({
+          id: uuidv4(), label: row.label.trim(), command: row.command.trim(),
+          description: (row.description || '').trim(),
+        });
+        stats.cliAdded++;
+      }
+    }
+
+    for (const row of parsed.links) {
+      const oem = findOrCreateOEM(row.oemName);
+      const cat = findOrCreateCategory(oem, row.category);
+      const prod = findOrCreateProduct(cat, row.productName, row.model);
+      prod.referenceLinks = prod.referenceLinks || [];
+      const isDuplicate = prod.referenceLinks.some(l => norm(l.url) === norm(row.url));
+      if (!isDuplicate) {
+        prod.referenceLinks.push({
+          id: uuidv4(), title: row.title.trim(), url: row.url.trim(),
+          notes: (row.notes || '').trim(),
+        });
+        stats.linksAdded++;
+      }
+    }
+
+    _data = { ..._data, oems };
+    saveData(_data);
+    notify();
+    return stats;
+  };
+
   // ── Helpers ───────────────────────────────────────
   function getProduct(oemId: string, catId: string, prodId: string): Product | undefined {
     const oem = _data.oems.find(o => o.id === oemId);
@@ -317,6 +450,7 @@ export function useAppStore() {
     addCLICommand, updateCLICommand, deleteCLICommand,
     toggleFavorite,
     getExportJSON, importData,
+    bulkImportRows,
     getAllProducts,
     getProduct,
   };

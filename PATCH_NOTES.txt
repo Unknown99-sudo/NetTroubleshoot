@@ -1,0 +1,1 @@
+Patched PDF open, links state support, added dependencies for intent launcher and xlsx.
