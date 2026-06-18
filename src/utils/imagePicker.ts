@@ -1,8 +1,10 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 
 /**
- * Opens the native image library picker and returns the selected
- * image as a base64 data URI.
+ * Opens the native image library picker and returns the selected image
+ * as a base64 data URI so it is embedded in the database and works offline
+ * across all devices without path issues.
  */
 export async function pickImageAsBase64(): Promise<string | null> {
   try {

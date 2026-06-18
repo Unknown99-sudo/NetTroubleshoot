@@ -3,8 +3,9 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
 /**
- * Writes the export JSON to a temporary file and opens the native
- * share sheet so the user can save it or send it to another person.
+ * Writes the export JSON to a temporary file and opens the native share
+ * sheet. This is the legacy JSON export path, kept for cross-device
+ * compatibility when the recipient doesn't have the app's .db format.
  */
 export async function exportDataToFile(jsonStr: string): Promise<{ success: boolean; message: string }> {
   try {
@@ -19,7 +20,7 @@ export async function exportDataToFile(jsonStr: string): Promise<{ success: bool
     if (canShare) {
       await Sharing.shareAsync(fileUri, {
         mimeType: 'application/json',
-        dialogTitle: 'Export NetTrouble Data',
+        dialogTitle: 'Export NetTrouble Data (JSON)',
         UTI: 'public.json',
       });
       return { success: true, message: 'Export ready — choose where to save or share it.' };

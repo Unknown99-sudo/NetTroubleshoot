@@ -1,21 +1,126 @@
 import { useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SQLite from 'expo-sqlite';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import {
   AppData, OEM, Category, Product, CLICommand, DataSheet,
   BulkProductRow, BulkCLIRow, BulkLinkRow, BulkImportStats,
 } from './types';
 
-const STORAGE_KEY = 'nettrouble_data';
-const uuidv4 = () => `${Date.now()}_${Math.random().toString(36).slice(2,10)}`;
+const DB_NAME = 'nettrouble.db';
+const uuidv4 = () => `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
-const defaultData: AppData = {
-  oems: [],
-  favorites: [],
-  version: '1.0.0',
-};
+// ── DB singleton ──────────────────────────────────────────────────────────────
+let _db: SQLite.SQLiteDatabase | null = null;
 
-// Singleton state management via custom hook
-let _data: AppData = defaultData;
+function getDb(): SQLite.SQLiteDatabase {
+  if (!_db) {
+    _db = SQLite.openDatabaseSync(DB_NAME);
+  }
+  return _db;
+}
+
+function initDb() {
+  const db = getDb();
+  db.execSync(`PRAGMA journal_mode=WAL;`);
+  db.execSync(`
+    CREATE TABLE IF NOT EXISTS kv (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+}
+
+function dbSave(data: AppData) {
+  try {
+    const db = getDb();
+    db.runSync(
+      `INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      ['appdata', JSON.stringify(data)]
+    );
+  } catch (e) {
+    console.error('dbSave failed', e);
+  }
+}
+
+function dbLoad(): AppData {
+  try {
+    const db = getDb();
+    const row = db.getFirstSync<{ value: string }>(`SELECT value FROM kv WHERE key='appdata'`);
+    if (row?.value) return JSON.parse(row.value);
+  } catch (e) {
+    console.error('dbLoad failed', e);
+  }
+  return { oems: [], favorites: [], version: '1.0.0' };
+}
+
+// ── Export the .db file ───────────────────────────────────────────────────────
+export async function exportDatabase(): Promise<{ success: boolean; message: string }> {
+  try {
+    // expo-sqlite stores the db in documentDirectory/SQLite/
+    const srcUri = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
+    const info = await FileSystem.getInfoAsync(srcUri);
+    if (!info.exists) {
+      return { success: false, message: 'Database file not found.' };
+    }
+    const destUri = `${FileSystem.cacheDirectory}nettrouble_backup_${Date.now()}.db`;
+    await FileSystem.copyAsync({ from: srcUri, to: destUri });
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(destUri, {
+        mimeType: 'application/octet-stream',
+        dialogTitle: 'Export NetTrouble Database',
+        UTI: 'public.database',
+      });
+      return { success: true, message: 'Database exported — choose where to save or share it.' };
+    }
+    return { success: true, message: `Saved to ${destUri}` };
+  } catch (e: any) {
+    console.error('exportDatabase failed', e);
+    return { success: false, message: e?.message || 'Export failed.' };
+  }
+}
+
+// ── Import a .db file ─────────────────────────────────────────────────────────
+export async function importDatabase(
+  onSuccess: (data: AppData) => void
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/octet-stream', '*/*'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled) return { success: false, message: 'cancelled' };
+    const asset = result.assets?.[0];
+    if (!asset) return { success: false, message: 'No file selected.' };
+
+    // Close current db connection, copy the file over, re-open
+    if (_db) {
+      _db.closeSync();
+      _db = null;
+    }
+
+    const destUri = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
+    await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}SQLite/`, { intermediates: true }).catch(() => {});
+    await FileSystem.copyAsync({ from: asset.uri, to: destUri });
+
+    // Re-init
+    initDb();
+    const data = dbLoad();
+    onSuccess(data);
+    return { success: true, message: `Imported successfully — ${data.oems.length} OEM(s) restored.` };
+  } catch (e: any) {
+    console.error('importDatabase failed', e);
+    // Try to re-init even on failure
+    try { initDb(); } catch {}
+    return { success: false, message: e?.message || 'Import failed.' };
+  }
+}
+
+// ── Singleton state ───────────────────────────────────────────────────────────
+let _data: AppData = { oems: [], favorites: [], version: '1.0.0' };
 let _loaded = false;
 const _listeners: Array<() => void> = [];
 
@@ -23,24 +128,7 @@ function notify() {
   _listeners.forEach(fn => fn());
 }
 
-async function saveData(data: AppData) {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // ignore write errors
-  }
-}
-
-async function loadData(): Promise<AppData> {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore parse/read errors
-  }
-  return defaultData;
-}
-
+// ── Hook ──────────────────────────────────────────────────────────────────────
 export function useAppStore() {
   const [, forceUpdate] = useState(0);
   const [ready, setReady] = useState(_loaded);
@@ -50,12 +138,15 @@ export function useAppStore() {
     _listeners.push(fn);
 
     if (!_loaded) {
-      loadData().then(data => {
-        _data = data;
-        _loaded = true;
-        setReady(true);
-        notify();
-      });
+      try {
+        initDb();
+        _data = dbLoad();
+      } catch (e) {
+        console.error('store init failed', e);
+      }
+      _loaded = true;
+      setReady(true);
+      notify();
     }
 
     return () => {
@@ -68,7 +159,7 @@ export function useAppStore() {
   const addOEM = (name: string, logo: string, website: string) => {
     const oem: OEM = { id: uuidv4(), name, logo, website, categories: [] };
     _data = { ..._data, oems: [..._data.oems, oem] };
-    saveData(_data);
+    dbSave(_data);
     notify();
     return oem;
   };
@@ -78,13 +169,13 @@ export function useAppStore() {
       ..._data,
       oems: _data.oems.map(o => (o.id === id ? { ...o, ...patch } : o)),
     };
-    saveData(_data);
+    dbSave(_data);
     notify();
   };
 
   const deleteOEM = (id: string) => {
     _data = { ..._data, oems: _data.oems.filter(o => o.id !== id) };
-    saveData(_data);
+    dbSave(_data);
     notify();
   };
 
@@ -97,7 +188,7 @@ export function useAppStore() {
         o.id === oemId ? { ...o, categories: [...o.categories, cat] } : o
       ),
     };
-    saveData(_data);
+    dbSave(_data);
     notify();
     return cat;
   };
@@ -116,7 +207,7 @@ export function useAppStore() {
           : o
       ),
     };
-    saveData(_data);
+    dbSave(_data);
     notify();
   };
 
@@ -129,7 +220,7 @@ export function useAppStore() {
           : o
       ),
     };
-    saveData(_data);
+    dbSave(_data);
     notify();
   };
 
@@ -158,7 +249,7 @@ export function useAppStore() {
           : o
       ),
     };
-    saveData(_data);
+    dbSave(_data);
     notify();
     return prod;
   };
@@ -184,7 +275,7 @@ export function useAppStore() {
           : o
       ),
     };
-    saveData(_data);
+    dbSave(_data);
     notify();
   };
 
@@ -205,7 +296,7 @@ export function useAppStore() {
       ),
       favorites: _data.favorites.filter(f => f !== prodId),
     };
-    saveData(_data);
+    dbSave(_data);
     notify();
   };
 
@@ -261,12 +352,11 @@ export function useAppStore() {
       ? _data.favorites.filter(f => f !== prodId)
       : [..._data.favorites, prodId];
     _data = { ..._data, favorites: favs };
-    saveData(_data);
+    dbSave(_data);
     notify();
   };
 
-  // ── Export / Import ───────────────────────────────
-  // Returns the JSON string to be written to a file and shared.
+  // ── Legacy JSON Export / Import (kept for compatibility) ──────────────────
   const getExportJSON = (): string => {
     const exportObj: AppData = { ..._data, exportedAt: new Date().toISOString() };
     return JSON.stringify(exportObj, null, 2);
@@ -283,7 +373,7 @@ export function useAppStore() {
         favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
         version: '1.0.0',
       };
-      saveData(_data);
+      dbSave(_data);
       notify();
       return { success: true, message: `Imported ${parsed.oems.length} OEM(s) successfully.` };
     } catch (e) {
@@ -292,11 +382,6 @@ export function useAppStore() {
   };
 
   // ── Bulk Import (spreadsheet) ─────────────────────
-  // Merges parsed rows from the bulk-import template into the existing
-  // data set. OEM / Category / Product are matched by name (case-insensitive,
-  // trimmed) and auto-created if no match is found, so the same workbook can
-  // be re-imported later to add more commands/links without duplicating
-  // anything already in the app.
   const bulkImportRows = (parsed: {
     products: BulkProductRow[];
     cli: BulkCLIRow[];
@@ -304,7 +389,6 @@ export function useAppStore() {
   }): BulkImportStats => {
     const norm = (s?: string) => (s || '').trim().toLowerCase();
 
-    // Deep-ish copy so we can mutate freely while building the new dataset.
     const oems: OEM[] = _data.oems.map(o => ({
       ...o,
       categories: o.categories.map(c => ({
@@ -416,7 +500,7 @@ export function useAppStore() {
     }
 
     _data = { ..._data, oems };
-    saveData(_data);
+    dbSave(_data);
     notify();
     return stats;
   };
@@ -440,6 +524,15 @@ export function useAppStore() {
     return result;
   }, []);
 
+  // ── DB backup/restore (exposed to UI) ────────────────────────────────────
+  const exportDb = exportDatabase;
+  const importDb = (cb: (data: AppData) => void) => importDatabase((data) => {
+    _data = data;
+    _loaded = true;
+    cb(data);
+    notify();
+  });
+
   return {
     data: _data,
     ready,
@@ -453,5 +546,7 @@ export function useAppStore() {
     bulkImportRows,
     getAllProducts,
     getProduct,
+    exportDb,
+    importDb,
   };
 }

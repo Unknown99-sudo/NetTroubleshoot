@@ -49,14 +49,14 @@ export default function SettingsView({ search = '' }: { search?: string }) {
   const toggleCat = (id: string) =>
     setExpandedCats(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
-  // ── FIXED: Native export using expo-file-system + expo-sharing ──
+  // ── JSON export (legacy) ──
   const handleExport = async () => {
     const json = store.getExportJSON();
     const result = await exportDataToFile(json);
     showToast(result.success ? 'success' : 'error', result.message);
   };
 
-  // ── FIXED: Native import using expo-document-picker ──
+  // ── JSON import (legacy) ──
   const handleImport = async () => {
     const picked = await pickImportFile();
     if (!picked.success || picked.message === 'cancelled') return;
@@ -66,6 +66,39 @@ export default function SettingsView({ search = '' }: { search?: string }) {
     }
     const result = store.importData(picked.content);
     showToast(result.success ? 'success' : 'error', result.message);
+  };
+
+  // ── SQLite DB export ──
+  const [dbBusy, setDbBusy] = useState<'export' | 'import' | null>(null);
+
+  const handleDbExport = async () => {
+    setDbBusy('export');
+    const result = await store.exportDb();
+    setDbBusy(null);
+    showToast(result.success ? 'success' : 'error', result.message);
+  };
+
+  // ── SQLite DB import ──
+  const handleDbImport = async () => {
+    Alert.alert(
+      'Restore from Database',
+      'This will REPLACE all current data with the selected .db backup. This cannot be undone. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Replace & Restore',
+          style: 'destructive',
+          onPress: async () => {
+            setDbBusy('import');
+            const result = await store.importDb(() => {});
+            setDbBusy(null);
+            if (result.message !== 'cancelled') {
+              showToast(result.success ? 'success' : 'error', result.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // ── Bulk import from spreadsheet ──
@@ -156,6 +189,36 @@ export default function SettingsView({ search = '' }: { search?: string }) {
           </View>
           <Text style={styles.dataHint}>
             Export your data to share with colleagues, or import a previously exported backup.
+          </Text>
+        </View>
+
+        {/* SQLite Database Backup / Restore */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Database Backup &amp; Restore</Text>
+          <View style={styles.dataButtons}>
+            <TouchableOpacity
+              onPress={handleDbExport}
+              disabled={dbBusy !== null}
+              style={[styles.exportBtn, dbBusy !== null && styles.disabledBtnRow]}
+            >
+              <Ionicons name="server-outline" size={15} color={colors.white} />
+              <Text style={styles.exportBtnText}>
+                {dbBusy === 'export' ? 'Exporting…' : 'Export .db'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDbImport}
+              disabled={dbBusy !== null}
+              style={[styles.importBtn, dbBusy !== null && styles.disabledBtnRow]}
+            >
+              <Ionicons name="push-outline" size={15} color={colors.white} />
+              <Text style={styles.importBtnText}>
+                {dbBusy === 'import' ? 'Restoring…' : 'Restore .db'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.dataHint}>
+            Export the full SQLite database (.db) — share it to another device and tap Restore .db to transfer all OEMs, products, CLI commands, PDFs, and images.
           </Text>
         </View>
 
