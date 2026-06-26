@@ -44,6 +44,7 @@ export interface AppData {
   favorites: string[]; // product ids
   version: string;
   exportedAt?: string;
+  settings?: { theme?: string };
 }
 
 // ── Bulk import (spreadsheet) ───────────────────────

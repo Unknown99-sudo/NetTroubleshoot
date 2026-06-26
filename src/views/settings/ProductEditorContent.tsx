@@ -7,7 +7,7 @@ import Input, { Textarea } from '../../components/Input';
 import { CLICommand, DataSheet } from '../../types';
 import { pickImageAsBase64 } from '../../utils/imagePicker';
 import { pickDatasheets } from '../../utils/datasheetPicker';
-import { colors } from '../../theme/colors';
+import { colors, useThemeMode } from '../../theme/colors';
 const uuidv4 = () => `${Date.now()}_${Math.random().toString(36).slice(2,10)}`;
 
 type Tab = 'info' | 'cli' | 'datasheets' | 'links';
@@ -30,6 +30,8 @@ interface Props {
 }
 
 export default function ProductEditorContent({ initial, onChange, accentColor = colors.blue600 }: Props) {
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
   const [tab, setTab] = useState<Tab>('info');
   const [state, setState] = useState<ProductEditorState>(initial);
 
@@ -229,7 +231,7 @@ export default function ProductEditorContent({ initial, onChange, accentColor = 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../../theme/colors').colors) => StyleSheet.create({
   tabBar: {
     flexDirection: 'row', backgroundColor: colors.bg800,
     padding: 4, borderRadius: 12, marginBottom: 14, gap: 4,

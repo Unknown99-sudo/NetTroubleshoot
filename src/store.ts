@@ -52,13 +52,174 @@ function dbLoad(): AppData {
   } catch (e) {
     console.error('dbLoad failed', e);
   }
-  return { oems: [], favorites: [], version: '1.0.0' };
+  return { oems: [], favorites: [], version: '1.0.0', settings:{theme:'dark'} };
+}
+
+function loadDataFromDatabaseFile(dbName: string): AppData {
+  const importedDb = SQLite.openDatabaseSync(dbName);
+  try {
+    const row = importedDb.getFirstSync<{ value: string }>(`SELECT value FROM kv WHERE key='appdata'`);
+    if (!row?.value) {
+      throw new Error('Selected database does not contain NetTrouble app data.');
+    }
+    const data: AppData = JSON.parse(row.value);
+    if (!Array.isArray(data.oems)) {
+      throw new Error('Selected database has an invalid data format.');
+    }
+    return {
+      ...data,
+      oems: data.oems,
+      favorites: Array.isArray(data.favorites) ? data.favorites : [],
+      version: data.version || '1.0.0',
+    };
+  } finally {
+    importedDb.closeSync();
+  }
+}
+
+function mergeAppData(existing: AppData, imported: AppData): AppData {
+  const norm = (s?: string) => (s || '').trim().toLowerCase();
+  const hasValue = (s?: string) => Boolean((s || '').trim());
+  const idMap = new Map<string, string>();
+
+  const oems: OEM[] = (existing.oems || []).map(oem => ({
+    ...oem,
+    categories: (oem.categories || []).map(cat => ({
+      ...cat,
+      products: (cat.products || []).map(prod => ({
+        ...prod,
+        datasheets: [...(prod.datasheets || [])],
+        cliCommands: [...(prod.cliCommands || [])],
+        referenceLinks: [...(prod.referenceLinks || [])],
+      })),
+    })),
+  }));
+
+  const cloneOEM = (oem: OEM): OEM => ({
+    ...oem,
+    categories: (oem.categories || []).map(cat => ({
+      ...cat,
+      products: (cat.products || []).map(prod => ({
+        ...prod,
+        datasheets: [...(prod.datasheets || [])],
+        cliCommands: [...(prod.cliCommands || [])],
+        referenceLinks: [...(prod.referenceLinks || [])],
+      })),
+    })),
+  });
+
+  for (const importedOem of imported.oems || []) {
+    let targetOem = oems.find(oem => norm(oem.name) === norm(importedOem.name));
+    if (!targetOem) {
+      const clonedOem = cloneOEM(importedOem);
+      for (const cat of clonedOem.categories || []) {
+        for (const prod of cat.products || []) {
+          idMap.set(prod.id, prod.id);
+        }
+      }
+      oems.push(clonedOem);
+      continue;
+    }
+
+    for (const importedCat of importedOem.categories || []) {
+      let targetCat = (targetOem.categories || []).find(cat => norm(cat.name) === norm(importedCat.name));
+      if (!targetCat) {
+        const clonedCat: Category = {
+          ...importedCat,
+          products: (importedCat.products || []).map(prod => ({
+            ...prod,
+            datasheets: [...(prod.datasheets || [])],
+            cliCommands: [...(prod.cliCommands || [])],
+            referenceLinks: [...(prod.referenceLinks || [])],
+          })),
+        };
+        for (const prod of clonedCat.products || []) {
+          idMap.set(prod.id, prod.id);
+        }
+        targetOem.categories = [...(targetOem.categories || []), clonedCat];
+        continue;
+      }
+
+      for (const importedProd of importedCat.products || []) {
+        let targetProd = (targetCat.products || []).find(
+          prod => norm(prod.name) === norm(importedProd.name) && norm(prod.model) === norm(importedProd.model)
+        );
+
+        if (!targetProd) {
+          const clonedProd: Product = {
+            ...importedProd,
+            datasheets: [...(importedProd.datasheets || [])],
+            cliCommands: [...(importedProd.cliCommands || [])],
+            referenceLinks: [...(importedProd.referenceLinks || [])],
+          };
+          idMap.set(importedProd.id, clonedProd.id);
+          targetCat.products = [...(targetCat.products || []), clonedProd];
+          continue;
+        }
+
+        idMap.set(importedProd.id, targetProd.id);
+
+        if (!hasValue(targetProd.image) && hasValue(importedProd.image)) {
+          targetProd.image = importedProd.image;
+        }
+        if (!hasValue(targetProd.description) && hasValue(importedProd.description)) {
+          targetProd.description = importedProd.description;
+        }
+        if (!hasValue(targetProd.notes) && hasValue(importedProd.notes)) {
+          targetProd.notes = importedProd.notes;
+        }
+
+        targetProd.cliCommands = [...(targetProd.cliCommands || [])];
+        for (const importedCommand of importedProd.cliCommands || []) {
+          const exists = targetProd.cliCommands.some(
+            command => norm(command.label) === norm(importedCommand.label) && norm(command.command) === norm(importedCommand.command)
+          );
+          if (!exists) {
+            targetProd.cliCommands.push({ ...importedCommand });
+          }
+        }
+
+        targetProd.datasheets = [...(targetProd.datasheets || [])];
+        for (const importedDatasheet of importedProd.datasheets || []) {
+          const exists = targetProd.datasheets.some(
+            datasheet => norm(datasheet.name) === norm(importedDatasheet.name)
+          );
+          if (!exists) {
+            targetProd.datasheets.push({ ...importedDatasheet });
+          }
+        }
+
+        targetProd.referenceLinks = [...(targetProd.referenceLinks || [])];
+        for (const importedLink of importedProd.referenceLinks || []) {
+          const exists = targetProd.referenceLinks.some(
+            link => norm(link.url) === norm(importedLink.url)
+          );
+          if (!exists) {
+            targetProd.referenceLinks.push({ ...importedLink });
+          }
+        }
+      }
+    }
+  }
+
+  const favorites = new Set(existing.favorites || []);
+  for (const favorite of imported.favorites || []) {
+    favorites.add(idMap.get(favorite) || favorite);
+  }
+
+  return {
+    ...existing,
+    oems,
+    favorites: Array.from(favorites),
+    version: existing.version || imported.version || '1.0.0',
+  };
 }
 
 // ── Export the .db file ───────────────────────────────────────────────────────
 export async function exportDatabase(): Promise<{ success: boolean; message: string }> {
   try {
     // expo-sqlite stores the db in documentDirectory/SQLite/
+    const db = getDb(); db.execSync('PRAGMA wal_checkpoint(TRUNCATE);');
     const srcUri = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
     const info = await FileSystem.getInfoAsync(srcUri);
     if (!info.exists) {
@@ -96,21 +257,26 @@ export async function importDatabase(
     const asset = result.assets?.[0];
     if (!asset) return { success: false, message: 'No file selected.' };
 
-    // Close current db connection, copy the file over, re-open
-    if (_db) {
-      _db.closeSync();
-      _db = null;
+    const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
+    const importDbName = `nettrouble_import_${Date.now()}.db`;
+    const importDbUri = `${sqliteDir}${importDbName}`;
+    await FileSystem.makeDirectoryAsync(sqliteDir, { intermediates: true }).catch(() => {});
+    await FileSystem.copyAsync({ from: asset.uri, to: importDbUri });
+
+    try {
+      initDb();
+      const currentData = dbLoad();
+      const importedData = loadDataFromDatabaseFile(importDbName);
+      const mergedData = mergeAppData(currentData, importedData);
+      dbSave(mergedData);
+
+      onSuccess(mergedData);
+      return { success: true, message: `Imported successfully - ${mergedData.oems.length} OEM(s) available after merge.` };
+    } finally {
+      await FileSystem.deleteAsync(importDbUri, { idempotent: true }).catch(() => {});
+      await FileSystem.deleteAsync(`${importDbUri}-wal`, { idempotent: true }).catch(() => {});
+      await FileSystem.deleteAsync(`${importDbUri}-shm`, { idempotent: true }).catch(() => {});
     }
-
-    const destUri = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
-    await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}SQLite/`, { intermediates: true }).catch(() => {});
-    await FileSystem.copyAsync({ from: asset.uri, to: destUri });
-
-    // Re-init
-    initDb();
-    const data = dbLoad();
-    onSuccess(data);
-    return { success: true, message: `Imported successfully — ${data.oems.length} OEM(s) restored.` };
   } catch (e: any) {
     console.error('importDatabase failed', e);
     // Try to re-init even on failure
@@ -228,7 +394,7 @@ export function useAppStore() {
   const addProduct = (
     oemId: string,
     catId: string,
-    data: { name: string; model: string; image: string; description: string; notes: string }
+    data: { name: string; model: string; image: string; description: string; notes: string; referenceLinks?: Product['referenceLinks'] }
   ) => {
     const prod: Product = {
       id: uuidv4(),

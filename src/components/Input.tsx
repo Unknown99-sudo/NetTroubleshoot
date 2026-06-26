@@ -1,12 +1,15 @@
 import React from 'react';
 import { View, Text, TextInput, TextInputProps, StyleSheet } from 'react-native';
-import { colors } from '../theme/colors';
+import { colors, useThemeMode } from '../theme/colors';
 
 interface InputProps extends TextInputProps {
   label?: string;
 }
 
 export default function Input({ label, style, ...props }: InputProps) {
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
+
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -20,6 +23,9 @@ export default function Input({ label, style, ...props }: InputProps) {
 }
 
 export function Textarea({ label, style, ...props }: InputProps) {
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
+
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -33,7 +39,7 @@ export function Textarea({ label, style, ...props }: InputProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../theme/colors').colors) => StyleSheet.create({
   container: {
     gap: 4,
   },

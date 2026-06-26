@@ -7,7 +7,7 @@ import Modal from '../../components/Modal';
 import Input from '../../components/Input';
 import { OEM } from '../../types';
 import { pickImageAsBase64 } from '../../utils/imagePicker';
-import { colors } from '../../theme/colors';
+import { colors, useThemeMode } from '../../theme/colors';
 
 interface Props {
   initial?: OEM;
@@ -16,6 +16,8 @@ interface Props {
 }
 
 export default function OEMFormModal({ initial, onClose, onSave }: Props) {
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
   const [name, setName] = useState(initial?.name ?? '');
   const [website, setWebsite] = useState(initial?.website ?? '');
   const [logo, setLogo] = useState(initial?.logo ?? '');
@@ -86,7 +88,7 @@ export default function OEMFormModal({ initial, onClose, onSave }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../../theme/colors').colors) => StyleSheet.create({
   container: { gap: 14 },
   label: { fontSize: 13, color: colors.gray400, fontWeight: '500', marginBottom: 6 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

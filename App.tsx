@@ -1,29 +1,49 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  StatusBar, ActivityIndicator, TextInput
+  StatusBar, ActivityIndicator, TextInput, BackHandler
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from './src/store';
 import HomeView from './src/views/HomeView';
 import FavoritesView from './src/views/FavoritesView';
+import ToolsView from './src/views/ToolsView';
 import SettingsView from './src/views/settings/SettingsView';
-import { colors } from './src/theme/colors';
+import { colors, useThemeMode } from './src/theme/colors';
 
-type Tab = 'home' | 'favorites' | 'settings';
+type Tab = 'home' | 'favorites' | 'tools' | 'settings';
 
 function AppInner() {
   const [tab, setTab] = useState<Tab>('home');
   const [search, setSearch] = useState('');
+  const [toolsBackTick, setToolsBackTick] = useState(0);
   const insets = useSafeAreaInsets();
   const store = useAppStore();
   const favCount = store.data.favorites.length;
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
+  const isLight = theme.mode === 'light';
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (tab === 'tools') {
+        setToolsBackTick(tick => tick + 1);
+        return true;
+      }
+      if (tab !== 'home') {
+        setTab('home');
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [tab]);
 
   if (!store.ready) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color={colors.blue400} />
+        <ActivityIndicator size="large" color={theme.colors.blue400} />
       </View>
     );
   }
@@ -31,36 +51,50 @@ function AppInner() {
   const tabs: { id: Tab; label: string; icon: string; activeIcon: string }[] = [
     { id: 'home', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
     { id: 'favorites', label: 'Favorites', icon: 'star-outline', activeIcon: 'star' },
+    { id: 'tools', label: 'Tools', icon: 'construct-outline', activeIcon: 'construct' },
     { id: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' },
   ];
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bg900} />
+      <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={theme.colors.bg900} />
 
       {/* Search bar (replaces old branding header) */}
       <View style={styles.searchHeader}>
         <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={16} color={colors.gray400} />
+          <Ionicons name="search-outline" size={15} color={theme.colors.gray400} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search OEMs, products, models, commands…"
-            placeholderTextColor={colors.gray500}
+            placeholderTextColor={theme.colors.gray500}
             style={styles.searchInput}
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color={colors.gray500} />
+              <Ionicons name="close-circle" size={15} color={theme.colors.gray500} />
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity
+          onPress={theme.toggleTheme}
+          style={styles.themeToggle}
+          accessibilityRole="button"
+          accessibilityLabel={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
+        >
+          <Ionicons
+            name={isLight ? 'moon-outline' : 'sunny-outline'}
+            size={18}
+            color={isLight ? '#2563eb' : '#facc15'}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Main content */}
       <View style={styles.content}>
         {tab === 'home' && <HomeView search={search} />}
         {tab === 'favorites' && <FavoritesView search={search} />}
+        {tab === 'tools' && <ToolsView search={search} backTick={toolsBackTick} onRootBack={() => setTab('home')} />}
         {tab === 'settings' && <SettingsView search={search} />}
       </View>
 
@@ -80,7 +114,7 @@ function AppInner() {
                 <Ionicons
                   name={(isActive ? t.activeIcon : t.icon) as any}
                   size={21}
-                  color={isActive ? colors.blue400 : colors.gray500}
+                  color={isActive ? '#60a5fa' : '#6b7280'}
                 />
                 {t.id === 'favorites' && favCount > 0 && (
                   <View style={styles.badge}>
@@ -107,34 +141,48 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('./src/theme/colors').colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg950 },
   loading: { flex: 1, backgroundColor: colors.bg950, alignItems: 'center', justifyContent: 'center' },
   searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: colors.bg900,
     borderBottomWidth: 1,
     borderBottomColor: colors.border800,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     backgroundColor: colors.bg800,
     borderWidth: 1,
     borderColor: colors.border700,
-    borderRadius: 12,
-    gap: 8,
+    borderRadius: 10,
+    gap: 7,
   },
-  searchInput: { flex: 1, fontSize: 13, color: colors.white, padding: 0 },
+  searchInput: { flex: 1, fontSize: 12, color: colors.white, padding: 0 },
+  themeToggle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg800,
+    borderWidth: 1,
+    borderColor: colors.border700,
+  },
   content: { flex: 1 },
   bottomTabBar: {
     flexDirection: 'row',
-    backgroundColor: colors.bg900,
+    backgroundColor: '#111827',
     borderTopWidth: 1,
-    borderTopColor: colors.border800,
+    borderTopColor: '#1f2937',
     paddingTop: 8,
   },
   tabBtn: {
@@ -149,16 +197,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    color: colors.gray500,
+    color: '#6b7280',
   },
-  tabLabelActive: { color: colors.blue400 },
+  tabLabelActive: { color: '#60a5fa' },
   activeBar: {
     position: 'absolute',
     top: -8,
     width: 28,
     height: 2,
     borderRadius: 2,
-    backgroundColor: colors.blue400,
+    backgroundColor: '#60a5fa',
     alignSelf: 'center',
   },
   badge: {
@@ -168,7 +216,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.yellow500,
+    backgroundColor: '#eab308',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 2,

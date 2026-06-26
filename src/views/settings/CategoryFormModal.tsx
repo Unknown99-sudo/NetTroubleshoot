@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Modal from '../../components/Modal';
 import Input from '../../components/Input';
 import { Category } from '../../types';
-import { colors } from '../../theme/colors';
+import { colors, useThemeMode } from '../../theme/colors';
 
 const PRESETS = ['Switch', 'Router', 'Firewall', 'Access Point', 'Server', 'Storage', 'UPS', 'Cable', 'Module', 'Other'];
 
@@ -14,6 +14,8 @@ interface Props {
 }
 
 export default function CategoryFormModal({ initial, onClose, onSave }: Props) {
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
   const [name, setName] = useState(initial?.name ?? '');
 
   return (
@@ -56,7 +58,7 @@ export default function CategoryFormModal({ initial, onClose, onSave }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../../theme/colors').colors) => StyleSheet.create({
   container: { gap: 14 },
   label: { fontSize: 11, color: colors.gray400, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 1 },
   presets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

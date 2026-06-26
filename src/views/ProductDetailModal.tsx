@@ -9,7 +9,7 @@ import { OEM, Category, Product } from '../types';
 import { useAppStore } from '../store';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
-import { colors } from '../theme/colors';
+import { colors, useThemeMode } from '../theme/colors';
 import { openDatasheet } from '../utils/openDatasheet';
 
 interface Props {
@@ -23,6 +23,8 @@ type Tab = 'info' | 'cli' | 'datasheets' | 'links';
 
 export default function ProductDetailModal({ product, oem, category, onClose }: Props) {
   const store = useAppStore();
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
   const isFav = store.data.favorites.includes(product.id);
   const [tab, setTab] = useState<Tab>('info');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -41,6 +43,15 @@ export default function ProductDetailModal({ product, oem, category, onClose }: 
     { id: 'datasheets' as Tab, label: `Docs (${product.datasheets.length})`, icon: 'document-text-outline' },
     { id: 'links' as Tab, label: `Links (${product.referenceLinks?.length || 0})`, icon: 'link-outline' },
   ];
+  const searchTerms = cliSearch
+    .toLowerCase()
+    .split(/\s+/)
+    .map(term => term.trim())
+    .filter(term => term && !['how', 'to', 'the', 'a', 'an', 'for', 'of', 'in', 'on'].includes(term));
+  const filteredCommands = product.cliCommands.filter(cmd => {
+    const haystack = `${cmd.label} ${cmd.command} ${cmd.description || ''}`.toLowerCase();
+    return searchTerms.length === 0 || searchTerms.every(term => haystack.includes(term));
+  });
 
   return (
     <Modal title={product.name} onClose={onClose} size="xl">
@@ -121,11 +132,18 @@ export default function ProductDetailModal({ product, oem, category, onClose }: 
       {/* CLI tab */}
       {tab === 'cli' && (
         <View style={styles.tabContent}>
-          <Text style={{color:'white',marginBottom:6}}>{product.cliCommands.filter(cmd => (cmd.label+' '+cmd.command+' '+(cmd.description||'')).toLowerCase().includes(cliSearch.toLowerCase())).length} result(s)</Text><TextInput value={cliSearch} onChangeText={setCliSearch} placeholder='Search commands...' placeholderTextColor={colors.gray500} style={{borderWidth:1,borderColor:colors.border700,padding:10,borderRadius:8,marginBottom:8,color:colors.white,backgroundColor:colors.bg800}} />
-          {product.cliCommands.filter(cmd => (cmd.label+' '+cmd.command+' '+(cmd.description||'')).toLowerCase().includes(cliSearch.toLowerCase())).length === 0 ? (
+          <Text style={styles.cliResultText}>{filteredCommands.length} result(s)</Text>
+          <TextInput
+            value={cliSearch}
+            onChangeText={setCliSearch}
+            placeholder="Search commands or descriptions..."
+            placeholderTextColor={colors.gray500}
+            style={styles.cliSearchInput}
+          />
+          {filteredCommands.length === 0 ? (
             <Text style={styles.emptyText}>{cliSearch.length>0 ? 'No matching commands found.' : 'No CLI commands added yet.'}</Text>
           ) : (
-            product.cliCommands.filter(cmd => (cmd.label+' '+cmd.command+' '+(cmd.description||'')).toLowerCase().includes(cliSearch.toLowerCase())).map(cmd => (
+            filteredCommands.map(cmd => (
               <View key={cmd.id} style={styles.cliCard}>
                 <TouchableOpacity
                   style={styles.cliHeader}
@@ -212,7 +230,7 @@ export default function ProductDetailModal({ product, oem, category, onClose }: 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../theme/colors').colors) => StyleSheet.create({
   headerCard: {
     flexDirection: 'row',
     gap: 12,
@@ -298,6 +316,16 @@ const styles = StyleSheet.create({
   },
   notesText: { fontSize: 13, color: colors.yellow100_80, lineHeight: 20 },
   emptyText: { fontSize: 13, color: colors.gray500, textAlign: 'center', paddingVertical: 32 },
+  cliResultText: { color: colors.white, marginBottom: 6 },
+  cliSearchInput: {
+    borderWidth: 1,
+    borderColor: colors.border700,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+    color: colors.white,
+    backgroundColor: colors.bg800,
+  },
   cliCard: {
     backgroundColor: colors.bg800,
     borderWidth: 1,

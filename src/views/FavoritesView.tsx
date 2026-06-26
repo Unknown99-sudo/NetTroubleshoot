@@ -7,10 +7,12 @@ import { useAppStore } from '../store';
 import { Product, OEM, Category } from '../types';
 import Badge from '../components/Badge';
 import ProductDetailModal from './ProductDetailModal';
-import { colors } from '../theme/colors';
+import { colors, useThemeMode } from '../theme/colors';
 
 export default function FavoritesView({ search = '' }: { search?: string }) {
   const store = useAppStore();
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
   const [selected, setSelected] = useState<{ product: Product; oem: OEM; category: Category } | null>(null);
 
   const allFavorites = store.getAllProducts().filter(({ product }) =>
@@ -116,7 +118,7 @@ export default function FavoritesView({ search = '' }: { search?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../theme/colors').colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg950 },
   empty: {
     flex: 1,

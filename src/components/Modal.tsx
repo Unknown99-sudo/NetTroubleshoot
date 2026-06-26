@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal as RNModal, View, Text, TouchableOpacity, StyleSheet, Pressable, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
+import { colors, useThemeMode } from '../theme/colors';
 
 interface ModalProps {
   title: string;
@@ -12,6 +12,8 @@ interface ModalProps {
 
 export default function Modal({ title, onClose, children, size = 'md' }: ModalProps) {
   const { height } = Dimensions.get('window');
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
 
   return (
     <RNModal visible animationType="fade" transparent onRequestClose={onClose}>
@@ -33,7 +35,7 @@ export default function Modal({ title, onClose, children, size = 'md' }: ModalPr
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../theme/colors').colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: colors.black50,

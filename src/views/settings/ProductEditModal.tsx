@@ -4,7 +4,7 @@ import Modal from '../../components/Modal';
 import ProductEditorContent, { ProductEditorState } from './ProductEditorContent';
 import { useAppStore } from '../../store';
 import { Product } from '../../types';
-import { colors } from '../../theme/colors';
+import { colors, useThemeMode } from '../../theme/colors';
 
 interface Props {
   oemId: string;
@@ -15,6 +15,8 @@ interface Props {
 
 export default function ProductEditModal({ oemId, catId, product, onClose }: Props) {
   const store = useAppStore();
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
   const initial: ProductEditorState = {
     name: product.name,
     model: product.model,
@@ -24,7 +26,6 @@ export default function ProductEditModal({ oemId, catId, product, onClose }: Pro
     cliCommands: [...product.cliCommands],
     datasheets: [...product.datasheets],
     referenceLinks: [...(product.referenceLinks || [])],
-    referenceLinks: [...(product.referenceLinks||[])],
   };
   const [editorState, setEditorState] = useState<ProductEditorState>(initial);
 
@@ -66,7 +67,7 @@ export default function ProductEditModal({ oemId, catId, product, onClose }: Pro
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../../theme/colors').colors) => StyleSheet.create({
   footer: {
     flexDirection: 'row', gap: 10, marginTop: 20,
     paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border700,

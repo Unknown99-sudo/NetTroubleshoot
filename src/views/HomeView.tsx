@@ -6,11 +6,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store';
 import { OEM, Category, Product } from '../types';
-import { colors } from '../theme/colors';
+import { colors, useThemeMode } from '../theme/colors';
 import ProductDetailModal from './ProductDetailModal';
 
 export default function HomeView({ search = '' }: { search?: string }) {
   const store = useAppStore();
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
   const [expandedOEMs, setExpandedOEMs] = useState<Set<string>>(new Set());
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<{ product: Product; oem: OEM; category: Category } | null>(null);
@@ -201,7 +203,7 @@ export default function HomeView({ search = '' }: { search?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../theme/colors').colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg950 },
   list: { flex: 1 },
   listContent: { padding: 12, paddingBottom: 28, gap: 10 },

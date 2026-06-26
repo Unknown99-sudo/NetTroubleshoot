@@ -1,0 +1,14 @@
+{
+  "name": "nettrouble-lan-scanner",
+  "version": "1.0.0",
+  "description": "Native Android LAN scanner module for NetTrouble",
+  "main": "index.ts",
+  "private": true,
+  "expo-module": {
+    "android": {
+      "modules": [
+        "com.nettrouble.lanscanner.NetTroubleLanScannerModule"
+      ]
+    }
+  }
+}

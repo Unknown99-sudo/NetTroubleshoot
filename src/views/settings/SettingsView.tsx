@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../../store';
 import { OEM, Category, Product, BulkImportStats } from '../../types';
-import { colors } from '../../theme/colors';
+import { colors, useThemeMode } from '../../theme/colors';
 import { exportDataToFile, pickImportFile } from '../../utils/exportImport';
 import { downloadBulkTemplate } from '../../utils/bulkTemplate';
 import { pickBulkImportFile } from '../../utils/bulkImport';
@@ -21,6 +21,8 @@ interface Toast { type: ToastType; message: string }
 
 export default function SettingsView({ search = '' }: { search?: string }) {
   const store = useAppStore();
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
 
   const [toast, setToast] = useState<Toast | null>(null);
   const [expandedOEMs, setExpandedOEMs] = useState<Set<string>>(new Set());
@@ -529,7 +531,7 @@ export default function SettingsView({ search = '' }: { search?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../../theme/colors').colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg950 },
   toast: {
     position: 'absolute', top: 16, alignSelf: 'center', zIndex: 100,

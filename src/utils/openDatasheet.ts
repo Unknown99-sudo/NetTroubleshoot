@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 
 /**
  * Opens a datasheet for viewing.
@@ -12,6 +12,16 @@ import { Platform, Alert } from 'react-native';
 export async function openDatasheet(fileData: string, name: string): Promise<void> {
   try {
     let fileUri = fileData;
+
+    if (fileData.startsWith('http://') || fileData.startsWith('https://')) {
+      const supported = await Linking.canOpenURL(fileData);
+      if (!supported) {
+        Alert.alert('Cannot Open URL', fileData);
+        return;
+      }
+      await Linking.openURL(fileData);
+      return;
+    }
 
     if (fileData.startsWith('data:')) {
       // base64 data URI — write to cache and open from there

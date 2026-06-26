@@ -1,0 +1,14 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'com.nettrouble.lanscanner'
+version = '1.0.0'
+
+android {
+  namespace 'com.nettrouble.lanscanner'
+  defaultConfig {
+    minSdkVersion 23
+    versionCode 1
+    versionName '1.0.0'
+  }
+}

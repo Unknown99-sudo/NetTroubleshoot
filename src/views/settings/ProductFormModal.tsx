@@ -3,7 +3,7 @@ import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import Modal from '../../components/Modal';
 import ProductEditorContent, { ProductEditorState } from './ProductEditorContent';
 import { useAppStore } from '../../store';
-import { colors } from '../../theme/colors';
+import { colors, useThemeMode } from '../../theme/colors';
 
 interface Props {
   oemId: string;
@@ -19,6 +19,8 @@ const empty: ProductEditorState = {
 
 export default function ProductFormModal({ oemId, catId, onClose }: Props) {
   const store = useAppStore();
+  const theme = useThemeMode();
+  const styles = createStyles(theme.colors);
   const [editorState, setEditorState] = useState<ProductEditorState>(empty);
 
   const handleSave = () => {
@@ -59,7 +61,7 @@ export default function ProductFormModal({ oemId, catId, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof import('../../theme/colors').colors) => StyleSheet.create({
   footer: {
     flexDirection: 'row', gap: 10, marginTop: 20,
     paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border700,
